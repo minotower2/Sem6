@@ -1,14 +1,8 @@
 { pkgs ? import <nixpkgs> {} }: 
     pkgs.mkShell {
-    buildInputs = [
-      qt6.qtbase
-      (pkgs.python3.withPackages (ps: with ps; [
-        pyqtgraph
-      ]))
-    ];
     
     nativeBuildInputs = [
-      pkgs.qt6.wrapQtAppsHook
+      pkgs.qt5.wrapQtAppsHook
       pkgs.makeWrapper
       pkgs.openssl
       pkgs.qtcreator
