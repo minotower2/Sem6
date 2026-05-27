@@ -11,6 +11,7 @@
 #include "functions.h"
 #include "chebyshev_approximation.h" 
 #include "hermite_spline_approximation.h" 
+#include "parabolic_approximation.h"
 
 Window::Window(QWidget *parent, double a_in, double b_in, int n_in, int k_in)
     : QWidget(parent), a(a_in), show_a(a_in), b(b_in), show_b(b_in), n(n_in), k(k_in) {
@@ -24,22 +25,22 @@ Window::Window(QWidget *parent, double a_in, double b_in, int n_in, int k_in)
 
     calculate_points();
 
-    // Коэффициенты для Чебышева
-    // Размер n (для alpha_0 ... alpha_{n-1})
-    // Использует оригинальную функцию, не f.get()!
     chebyshev_c.reset(new double[n]);
     make_chebyshev_coefficients(n, this->a, this->b, function, chebyshev_c.get());
 
-    // Коэффициенты для сплайна Эрмита
     hermite_c.reset(new double[4 * n]); 
     make_cubic_hermite_coefficients(n, x.get(), f.get(), d.get(), hermite_c.get());
 
+
+    parabolic_c.reset(new double[4*n]);
+    make_parabolic_spline_coefficients(n, x.get(), f.get(), xi.get(), parabolic_c.get());
+    
     calculate_max_abs_f();
     calculate_min_max();
     init_status_bar();
 }
 
-void Window::calculate_points() { // Для узлов Бесселя (равномерная сетка)
+void Window::calculate_points() { // Для узлов Эрмита (равномерная сетка)
     double x_0_val;
     if (n < 1) return;
     if (n == 1) {
@@ -53,6 +54,9 @@ void Window::calculate_points() { // Для узлов Бесселя (равн�
         x[i] = x_0_val;
         f[i] = function(x_0_val);
         d[i] = derivative(x_0_val);
+    }
+    for (int i = 1; i < n; i++) {
+        xi[i] = 0.5*(x[i] + x[i-1]);
     }
 }
 
@@ -96,9 +100,20 @@ void Window::calculate_min_max() {
     min_y = std::numeric_limits<double>::infinity();
     max_y = -std::numeric_limits<double>::infinity();
 
+    // Режимы:
+    // 0: Исходная функция
+    // 1: Исходная + Чебышев
+    // 2: Исходная + Эрмит
+    // 3: Исходная + параболическая
+    // 4: Исходная + Чебышев + Эрмит + параболическая
+    // 5: Невязка Чебышева
+    // 6: Невязка Эрмита
+    // 7: Невязка параболической
+    // 8: Три невязки
+    
     for (x_0_val = show_a; x_0_val <= show_b + std::numeric_limits<double>::epsilon(); x_0_val += delta_x) {
         // Исходная функция (если не чисто режим невязок без исходной)
-        if (mode <= 3) { // Режимы 0, 1, 2, 3 включают исходную функцию
+        if (mode <= 4) { // Режимы 0, 1, 2, 3, 4 включают исходную функцию
             y_0_val = function(x_0_val); 
              if (!std::isnan(y_0_val)) {
                 if (!first_val_set) { min_y = max_y = y_0_val; first_val_set = true; }
@@ -107,23 +122,34 @@ void Window::calculate_min_max() {
         }
 
         // Чебышев
-        if (mode == 1 || mode == 3 || mode == 4 || mode == 6) { // Аппрокс: 1,3. Невязка: 4,6
+        if (mode == 1 || mode == 4 || mode == 5 || mode == 8) {
             if (n >= 1 && chebyshev_c && !std::isnan(chebyshev_c[0])) {
-                y_0_val = (mode == 1 || mode == 3) ? calculate_chebyshev_approximation(x_0_val, n, this->a, this->b, chebyshev_c.get())
+                y_0_val = (mode == 1 || mode == 4) ? calculate_chebyshev_approximation(x_0_val, n, this->a, this->b, chebyshev_c.get())
                                                : calculate_chebyshev_discrepancy(x_0_val, function, n, this->a, this->b, chebyshev_c.get());
                 if (!std::isnan(y_0_val)) {
-                    if (!first_val_set || (is_discrepancy_mode && mode > 3) ) { min_y = max_y = y_0_val; first_val_set = true; }
+                    if (!first_val_set || (is_discrepancy_mode && mode > 4) ) { min_y = max_y = y_0_val; first_val_set = true; }
                     else { min_y = std::min(min_y, y_0_val); max_y = std::max(max_y, y_0_val); }
                 }
             }
         }
         // Эрмит
-        if (mode == 2 || mode == 3 || mode == 5 || mode == 6) { // Аппрокс: 2,3. Невязка: 5,6
+        if (mode == 2 || mode == 4 || mode == 6 || mode == 8) {
             if (n >= 2 && hermite_c && !std::isnan(hermite_c[0])) {
-                y_0_val = (mode == 2 || mode == 3) ? calculate_cubic_hermite_approximation(x_0_val, n, x.get(), hermite_c.get())
+                y_0_val = (mode == 2 || mode == 4) ? calculate_cubic_hermite_approximation(x_0_val, n, x.get(), hermite_c.get())
                                                : calculate_cubic_hermite_discrepancy(x_0_val, function, n, x.get(), hermite_c.get());
                 if (!std::isnan(y_0_val)) {
-                    if (!first_val_set || (is_discrepancy_mode && mode > 3) ) { min_y = max_y = y_0_val; first_val_set = true; }
+                    if (!first_val_set || (is_discrepancy_mode && mode > 4) ) { min_y = max_y = y_0_val; first_val_set = true; }
+                    else { min_y = std::min(min_y, y_0_val); max_y = std::max(max_y, y_0_val); }
+                }
+            }
+        }
+        // Параболический
+        if (mode == 3 || mode == 4 || mode == 7 || mode == 8) {
+            if (n >= 2 && hermite_c && !std::isnan(hermite_c[0])) {
+                y_0_val = (mode == 3 || mode == 4) ? calculate_parabolic_spline_approximation(x_0_val, n, x.get(), xi.get(), parabolic_c.get())
+                                               : calculate_parabolic_spline_discrepancy(x_0_val, function, n, x.get(), xi.get(), hermite_c.get());
+                if (!std::isnan(y_0_val)) {
+                    if (!first_val_set || (is_discrepancy_mode && mode > 4) ) { min_y = max_y = y_0_val; first_val_set = true; }
                     else { min_y = std::min(min_y, y_0_val); max_y = std::max(max_y, y_0_val); }
                 }
             }
@@ -183,6 +209,9 @@ void Window::change_function() {
     hermite_c.reset(new double[4*n]); 
     make_cubic_hermite_coefficients(n, x.get(), f.get(), d.get(), hermite_c.get());
 
+    parabolic_c.reset(new double[4*n]);
+    make_parabolic_spline_coefficients(n, x.get(), f.get(), xi.get(), parabolic_c.get());
+    
     calculate_max_abs_f(); 
     calculate_min_max();
     function_description_changed(QString(get_function_description(k)));
@@ -234,6 +263,7 @@ void Window::increase_points() {
     x.reset(new double[n]);
     f.reset(new double[n]);
     d.reset(new double[n]);
+    xi.reset(new double[n]);
     calculate_points(); 
 
     if (p != 0 && n >= 1) { 
@@ -245,6 +275,9 @@ void Window::increase_points() {
 
     hermite_c.reset(new double[4*n]);
     make_cubic_hermite_coefficients(n, x.get(), f.get(), d.get(), hermite_c.get());
+
+    parabolic_c.reset(new double[4*n]);
+    make_parabolic_spline_coefficients(n, x.get(), f.get(), xi.get(), parabolic_c.get());
 
     calculate_min_max();
     char str_n_loc[16];
@@ -260,6 +293,7 @@ void Window::decrease_points() {
     x.reset(new double[n]);
     f.reset(new double[n]);
     d.reset(new double[n]);
+    xi.reset(new double[n]);
     calculate_points();
 
     if (p != 0 && n >= 1) {
@@ -271,6 +305,10 @@ void Window::decrease_points() {
 
     hermite_c.reset(new double[4*n]);
     make_cubic_hermite_coefficients(n, x.get(), f.get(), d.get(), hermite_c.get());
+
+
+    parabolic_c.reset(new double[4*n]);
+    make_parabolic_spline_coefficients(n, x.get(), f.get(), xi.get(), parabolic_c.get());
 
     calculate_min_max();
     char str_n_loc[16];
@@ -288,6 +326,8 @@ void Window::add_distortion() {
     make_cubic_hermite_coefficients(n, x.get(), f.get(), d.get(), hermite_c.get()); 
     // Чебышев не пересчитывается, он зависит от function.
 
+    make_parabolic_spline_coefficients(n, x.get(), f.get(), xi.get(), parabolic_c.get());
+
     char str_p_dist[16];
     std::snprintf(str_p_dist, 16, "p = %d", p);
     distortion_changed(QString(str_p_dist));
@@ -301,6 +341,8 @@ void Window::subtract_distortion() {
     f[n / 2] -= 0.1 * max_abs_f;
 
     make_cubic_hermite_coefficients(n, x.get(), f.get(), d.get(), hermite_c.get());
+
+    make_parabolic_spline_coefficients(n, x.get(), f.get(), xi.get(), parabolic_c.get());
 
     char str_p_dist[16];
     std::snprintf(str_p_dist, 16, "p = %d", p);
@@ -376,6 +418,17 @@ void Window::paintEvent(QPaintEvent* event_paint) {
     // 4: Невязка Чебышева
     // 5: Невязка Эрмита
     // 6: Обе невязки
+
+    // Режимы:
+    // 0: Исходная функция
+    // 1: Исходная + Чебышев
+    // 2: Исходная + Эрмит
+    // 3: Исходная + параболическая
+    // 4: Исходная + Чебышев + Эрмит + параболическая
+    // 5: Невязка Чебышева
+    // 6: Невязка Эрмита
+    // 7: Невязка параболической
+    // 8: Три невязки
 
     // Отрисовка исходной функции
     if (mode <= 3) { // Режимы 0, 1, 2, 3

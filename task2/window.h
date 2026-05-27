@@ -21,9 +21,11 @@ private:
 	std::unique_ptr<double[]> x = nullptr; // Узлы для Эрмита
 	std::unique_ptr<double[]> f = nullptr; // Значения f(x_i) для Эрмита
 	std::unique_ptr<double[]> d = nullptr; // Значения d(x_i) для Эрмита
+	std::unique_ptr<double[]> xi = nullptr; // Значения xi_i для Параболического
 
-    std::unique_ptr<double[]> chebyshev_c = nullptr; // Коэффициенты для Чебышева
-    std::unique_ptr<double[]> hermite_c = nullptr;    // Коэффициенты для сплайна Бесселя
+  std::unique_ptr<double[]> chebyshev_c = nullptr; // Коэффициенты для Чебышева
+  std::unique_ptr<double[]> hermite_c = nullptr;    // Коэффициенты для сплайна Эрмита
+  std::unique_ptr<double[]> parabolic_c = nullptr;    // Коэффициенты для кубической апроксимации
 
 	double (*function)(double); // Указатель на исходную функцию
 	double (*derivative)(double); // Указатель на производную
@@ -33,16 +35,18 @@ private:
 	int s = 0;  // Масштаб
 	int p = 0;  // Искажение (влияет на f.get() для Эрмита)
     
-    // Новые режимы:
+    // Режимы:
     // 0: Исходная функция
     // 1: Исходная + Чебышев
     // 2: Исходная + Эрмит
-    // 3: Исходная + Чебышев + Эрмит
-    // 4: Невязка Чебышева
-    // 5: Невязка Эрмита
-    // 6: Обе невязки
+    // 3: Исходная + параболическая
+    // 4: Исходная + Чебышев + Эрмит + параболическая
+    // 5: Невязка Чебышева
+    // 6: Невязка Эрмита
+    // 7: Невязка параболической
+    // 8: Три невязки
 	int mode = 0; 
-    int total_modes = 7; // Количество режимов от 0 до 6
+    int total_modes = 9;
 
 public:
 	Window(QWidget *parent, double a, double b, int n, int k);
