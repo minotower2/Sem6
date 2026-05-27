@@ -3,8 +3,9 @@
 #include <limits>
 #include <algorithm>
 #include <iostream>
+#include "parabolic_approximation.h"
 
-static bool solve_tridiagonal(int n, const double* a, const double* b, const double* c,
+bool solve_tridiagonal(int n, const double* a, const double* b, const double* c,
                               const double* d, double* x) {
     // a, b, c, d – массивы длины n, a[0] и c[n-1] не используются
     std::vector<double> alpha(n), beta(n);
@@ -26,7 +27,7 @@ static bool solve_tridiagonal(int n, const double* a, const double* b, const dou
 int make_parabolic_spline_coefficients(int n,
                                        const double* x_nodes,
                                        const double* f_values,
-                                       double* xi_nodes,
+                                       const double* xi_nodes,
                                        double* coeffs) {
     if (n < 2 || !x_nodes || !f_values || !xi_nodes || !coeffs) {
         if (coeffs && n >= 1) coeffs[0] = std::numeric_limits<double>::quiet_NaN();
@@ -41,15 +42,6 @@ int make_parabolic_spline_coefficients(int n,
         }
     }
 
-    // 1. Построение дополнительных узлов ξ
-    double h_left  = x_nodes[1] - x_nodes[0];
-    double h_right = x_nodes[n-1] - x_nodes[n-2];
-    xi_nodes[0] = x_nodes[0] - 0.5 * h_left;          // ξ₁
-    xi_nodes[n] = x_nodes[n-1] + 0.5 * h_right;       // ξ_{n+1}
-    for (int i = 1; i < n; ++i) {
-        xi_nodes[i] = 0.5 * (x_nodes[i-1] + x_nodes[i]);  // ξ_{i+1}
-    }
-    // После этого xi_nodes[0]=ξ₁, xi_nodes[1]=ξ₂, ..., xi_nodes[n-1]=ξ_n, xi_nodes[n]=ξ_{n+1}
 
     // 2. Подготовка системы для v_i (размер N = n+1)
     int N = n + 1;

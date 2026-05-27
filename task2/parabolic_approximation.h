@@ -3,14 +3,14 @@
 
 #include "functions.h" // Для func_t
 
-static bool solve_tridiagonal(int n, const double* a, const double* b, const double* c,
+bool solve_tridiagonal(int n, const double* a, const double* b, const double* c,
                               const double* d, double* x);
 
 
 int make_parabolic_spline_coefficients(int n,
                                        const double* x_nodes,
                                        const double* f_values,
-                                       double* xi_nodes,
+                                       const double* xi_nodes,
                                        double* coeffs);
 
 
