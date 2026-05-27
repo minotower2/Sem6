@@ -9,15 +9,19 @@ bool solve_tridiagonal(int n, const double* a, const double* b, const double* c,
                               const double* d, double* x) {
     // a, b, c, d – массивы длины n, a[0] и c[n-1] не используются
     std::vector<double> alpha(n), beta(n);
+    if (std::abs(b[0] < std::numeric_limits<double>::epsilon()))
+        return false;
+
     alpha[0] = -c[0] / b[0];
     beta[0]  =  d[0] / b[0];
     for (int i = 1; i < n; ++i) {
         double denom = b[i] + a[i] * alpha[i-1];
-        if (std::abs(denom) < std::numeric_limits<double>::epsilon())
+        if (std::abs(denom)  < std::numeric_limits<double>::epsilon())
             return false;
         alpha[i] = -c[i] / denom;
         beta[i]  = (d[i] - a[i] * beta[i-1]) / denom;
     }
+    
     x[n-1] = beta[n-1];
     for (int i = n-2; i >= 0; --i)
         x[i] = alpha[i] * x[i+1] + beta[i];
@@ -34,7 +38,7 @@ int make_parabolic_spline_coefficients(int n,
         return -1;
     }
 
-    // Проверка строгого возрастания узлов
+    // 1. Проверка строгого возрастания узлов
     for (int i = 0; i < n-1; ++i) {
         if (x_nodes[i+1] - x_nodes[i] <= std::numeric_limits<double>::epsilon()) {
             coeffs[0] = std::numeric_limits<double>::quiet_NaN();
@@ -51,7 +55,7 @@ int make_parabolic_spline_coefficients(int n,
     std::vector<double> h_i(n), z_i(n); // h_i = x_i - ξ_i, z_i = ξ_{i+1} - x_i, i=1..n
     for (int i = 0; i < n; ++i) {
         h_i[i] = x_nodes[i] - xi_nodes[i];
-        z_i[i] = xi_nodes[i+1] - xi_nodes[i];
+        z_i[i] = xi_nodes[i+1] - x_nodes[i];
         if (std::abs(h_i[i]) < std::numeric_limits<double>::epsilon() ||
             std::abs(z_i[i]) < std::numeric_limits<double>::epsilon()) {
             coeffs[0] = std::numeric_limits<double>::quiet_NaN();
@@ -69,10 +73,10 @@ int make_parabolic_spline_coefficients(int n,
 
     // Внутренние уравнения для i=2..n (условия непрерывности производной в ξ_i)
     for (int i = 1; i < n; ++i) {   // i соответствует номеру ξ_{i+1} в книге, индекс i в C++ от 1 до n-1
-        double h_left_span = x_nodes[i-i] - xi_nodes[i-1];   // x_{i} - ξ_{i}
-        double z_left_span = xi_nodes[i] - x_nodes[i-1];    // ξ_{i+1} - x_{i}
-        double h_right_span = x_nodes[i] - xi_nodes[i];  // x_{i+1} - ξ_{i+1}
-        double z_right_span = xi_nodes[i+1] - x_nodes[i]; // ξ_{i+2} - x_{i+1}
+        double h_left_span = h_i[i-1];   // x_{i} - ξ_{i}
+        double z_left_span = z_i[i-1];    // ξ_{i+1} - x_{i}
+        double h_right_span = h_i[i];  // x_{i+1} - ξ_{i+1}
+        double z_right_span = z_i[i]; // ξ_{i+2} - x_{i+1}
 
         if (std::abs(h_left_span) < std::numeric_limits<double>::epsilon() ||
             std::abs(z_left_span) < std::numeric_limits<double>::epsilon() ||
@@ -83,8 +87,8 @@ int make_parabolic_spline_coefficients(int n,
         }
 
         a[i] = 1.0/h_left_span - 1.0/(xi_nodes[i] - xi_nodes[i-1]);
-        b[i]  = 1.0/h_right_span + 1.0/(xi_nodes[i+1] - xi_nodes[i]);
-        c[i] = 1.0/z_right_span + 1.0/(xi_nodes[i+1] - xi_nodes[i]);
+        b[i]  = 1.0/h_right_span + 1.0/(xi_nodes[i+1] - xi_nodes[i]) + 1.0/(xi_nodes[i] - xi_nodes[i-1]) + 1.0/z_left_span;
+        c[i] = 1.0/z_right_span - 1.0/(xi_nodes[i+1] - xi_nodes[i]);
         d[i] = f_values[i-1] * (1.0/h_left_span + 1.0/z_left_span) +
                      f_values[i]   * (1.0/h_right_span + 1.0/z_right_span);
 
@@ -107,19 +111,18 @@ int make_parabolic_spline_coefficients(int n,
 
     // 4. Вычисление коэффициентов квадратичных полиномов для каждого интервала [ξ_i, ξ_{i+1}]
     for (int i = 0; i < n; ++i) {
-        double x = x_nodes[i];
-        double h = x - xi_nodes[i];          // h_i
-        double z = xi_nodes[i+1] - x;     // z_i
+        double h = x_nodes[i] - xi_nodes[i];          // h_i
+        double z = xi_nodes[i+1] - xi_nodes[i];     // z_i
 
         double inv_h = 1.0 / h;
         double inv_z = 1.0 / z;
-        double inv_hz = 1.0 / (h + z);
+        double inv_zh = 1.0 / (z - h);
 
         // Коэффициенты квадратичного полинома: P(x) = c0 + c1*t + c2*t^2, t = x - ξ_i
 
         coeffs[3*i + 0] = v[i];
-        coeffs[3*i + 1] = -v[i] * (inv_h + inv_hz) + f_values[i] * (inv_h + inv_z) - v[i+1] * (inv_z - inv_hz);
-        coeffs[3*i + 2] = v[i] * inv_hz - f_values[i] * inv_hz * (inv_h + inv_z) + v[i+1] * inv_hz * inv_z;
+        coeffs[3*i + 1] = (f_values[i] - v[i])*inv_h - ((x_nodes[i] - xi_nodes[i])*inv_z)*((v[i+1]-f_values[i])*inv_zh - (f_values[i] - v[i])*inv_h); 
+        coeffs[3*i + 2] = inv_z*((v[i+1] - f_values[i])*inv_zh - (f_values[i] - v[i])*inv_h);
     }
 
     return 0;

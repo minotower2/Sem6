@@ -19,6 +19,7 @@ Window::Window(QWidget *parent, double a_in, double b_in, int n_in, int k_in)
     x.reset(new double[n]); 
     f.reset(new double[n]);
     d.reset(new double[n]);
+    xi.reset(new double[n+1]);
 
     function = get_function(k);
     derivative = get_derivative(k);
@@ -31,8 +32,7 @@ Window::Window(QWidget *parent, double a_in, double b_in, int n_in, int k_in)
     hermite_c.reset(new double[4 * n]); 
     make_cubic_hermite_coefficients(n, x.get(), f.get(), d.get(), hermite_c.get());
 
-
-    parabolic_c.reset(new double[4*n]);
+    parabolic_c.reset(new double[3*n]);
     make_parabolic_spline_coefficients(n, x.get(), f.get(), xi.get(), parabolic_c.get());
     
     calculate_max_abs_f();
@@ -42,11 +42,13 @@ Window::Window(QWidget *parent, double a_in, double b_in, int n_in, int k_in)
 
 void Window::calculate_points() { // Для узлов Эрмита (равномерная сетка)
     double x_0_val;
+    double h_left, h_right;
     if (n < 1) return;
     if (n == 1) {
         x[0] = a;
         f[0] = function(a);
         d[0] = derivative(a);
+	xi[0] = a;
         return;
     }
     for (int i = 0; i < n; i++) {
@@ -55,9 +57,13 @@ void Window::calculate_points() { // Для узлов Эрмита (равно�
         f[i] = function(x_0_val);
         d[i] = derivative(x_0_val);
     }
+    h_left = x[1] - x[0];
+    h_right = x[n-1] - x[n-2];
     for (int i = 1; i < n; i++) {
         xi[i] = 0.5*(x[i] + x[i-1]);
     }
+    xi[0] = x[0] - 0.5* h_left;
+    xi[n] = x[n-1] + 0.5 * h_right;
 }
 
 void Window::calculate_max_abs_f() {
@@ -209,7 +215,7 @@ void Window::change_function() {
     hermite_c.reset(new double[4*n]); 
     make_cubic_hermite_coefficients(n, x.get(), f.get(), d.get(), hermite_c.get());
 
-    parabolic_c.reset(new double[4*n]);
+    parabolic_c.reset(new double[3*n]);
     make_parabolic_spline_coefficients(n, x.get(), f.get(), xi.get(), parabolic_c.get());
     
     calculate_max_abs_f(); 
@@ -263,7 +269,7 @@ void Window::increase_points() {
     x.reset(new double[n]);
     f.reset(new double[n]);
     d.reset(new double[n]);
-    xi.reset(new double[n]);
+    xi.reset(new double[n+1]);
     calculate_points(); 
 
     if (p != 0 && n >= 1) { 
@@ -276,7 +282,7 @@ void Window::increase_points() {
     hermite_c.reset(new double[4*n]);
     make_cubic_hermite_coefficients(n, x.get(), f.get(), d.get(), hermite_c.get());
 
-    parabolic_c.reset(new double[4*n]);
+    parabolic_c.reset(new double[3*n]);
     make_parabolic_spline_coefficients(n, x.get(), f.get(), xi.get(), parabolic_c.get());
 
     calculate_min_max();
@@ -293,7 +299,7 @@ void Window::decrease_points() {
     x.reset(new double[n]);
     f.reset(new double[n]);
     d.reset(new double[n]);
-    xi.reset(new double[n]);
+    xi.reset(new double[n+1]);
     calculate_points();
 
     if (p != 0 && n >= 1) {
@@ -307,7 +313,7 @@ void Window::decrease_points() {
     make_cubic_hermite_coefficients(n, x.get(), f.get(), d.get(), hermite_c.get());
 
 
-    parabolic_c.reset(new double[4*n]);
+    parabolic_c.reset(new double[3*n]);
     make_parabolic_spline_coefficients(n, x.get(), f.get(), xi.get(), parabolic_c.get());
 
     calculate_min_max();
@@ -437,12 +443,12 @@ void Window::paintEvent(QPaintEvent* event_paint) {
     }
     
     // Чебышев
-    if (mode == 1 || mode == 3) { // Аппроксимация
+    if (mode == 1 || mode == 4) { // Аппроксимация
         if ((n >= 1 && chebyshev_c && !std::isnan(chebyshev_c[0])) && (n <= 100)) {
             painter.setPen(pen_magenta);
             drawGraph(painter, std::bind(calculate_chebyshev_approximation, std::placeholders::_1, n, this->a, this->b, chebyshev_c.get()));
         }
-    } else if (mode == 4 || mode == 6) { // Невязка
+    } else if (mode == 5 || mode == 8) { // Невязка
         if (n >= 1 && chebyshev_c && !std::isnan(chebyshev_c[0])) {
             painter.setPen(pen_magenta);
             drawGraph(painter, std::bind(calculate_chebyshev_discrepancy, std::placeholders::_1, function, n, this->a, this->b, chebyshev_c.get()));
@@ -450,18 +456,30 @@ void Window::paintEvent(QPaintEvent* event_paint) {
     }
 
     // Эрмит сплайн
-    if (mode == 2 || mode == 3) { // Аппроксимация
+    if (mode == 2 || mode == 4) { // Аппроксимация
         if (n >= 2 && hermite_c && !std::isnan(hermite_c[0]) ) { // Эрмит требует n>=2
             painter.setPen(pen_cyan);
             drawGraph(painter, std::bind(calculate_cubic_hermite_approximation, std::placeholders::_1, n, x.get(), hermite_c.get()));
         }
-    } else if (mode == 5 || mode == 6) { // Невязка
+    } else if (mode == 6 || mode == 8) { // Невязка
          if (n >= 2 && hermite_c && !std::isnan(hermite_c[0]) ) {
             painter.setPen(pen_cyan);
             drawGraph(painter, std::bind(calculate_cubic_hermite_discrepancy, std::placeholders::_1, function, n, x.get(), hermite_c.get()));
         }
     }
 
+    // Параболический сплайн
+    if (mode == 3 || mode == 4) { // Аппроксимация
+        if (n >= 2 && parabolic_c && !std::isnan(parabolic_c[0]) ) {
+            painter.setPen(pen_black);
+            drawGraph(painter, std::bind(calculate_parabolic_spline_approximation, std::placeholders::_1, n, x.get(), xi.get(), parabolic_c.get()));
+        }
+    } else if (mode == 7 || mode == 8) { // Невязка
+         if (n >= 2 && parabolic_c && !std::isnan(parabolic_c[0]) ) {
+            painter.setPen(pen_black);
+            drawGraph(painter, std::bind(calculate_parabolic_spline_discrepancy, std::placeholders::_1, function, n, x.get(), xi.get(), parabolic_c.get()));
+        }
+    }
     painter.setPen(pen_black);
     painter.drawLine(l2g(show_a, 0), l2g(show_b, 0)); 
     painter.drawLine(l2g(0, min_y), l2g(0, max_y)); 
