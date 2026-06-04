@@ -1,0 +1,115 @@
+void GraphWidget::drawCoordSystem(QPainter *painter) 
+{
+    painter->setBrush(QBrush(bgColor));
+    painter->drawRect(0, 0, w, h);
+    painter->setBrush(Qt::NoBrush);
+
+    double L = 10*dist;   // длина осей
+
+    QPen penBlack(Qt::black);
+    penBlack.setWidth(2);
+    painter->setPen(penBlack);
+    
+    // --- Рисование самих осей (линий) ---
+    auto OX = segToPixels({-L, 0, 0}, {L, 0, 0});
+    if (OX.visible) painter->drawLine(OX.vertex[0], OX.vertex[1]);
+
+    auto OY = segToPixels({0, -L, 0}, {0, L, 0});
+    if (OY.visible) painter->drawLine(OY.vertex[0], OY.vertex[1]);
+
+    auto OZ = segToPixels({0, 0, -L}, {0, 0, L});
+    if (OZ.visible) painter->drawLine(OZ.vertex[0], OZ.vertex[1]);
+
+    // --- Функция для рисования засечек на одной оси ---
+    // axisDir: направление оси: "X", "Y" или "Z"
+    // start, end: точки начала и конца оси (в мировых координатах)
+    auto drawTicksOnAxis = [&](const QString &axisDir,
+                               const R3Geometry::Point &start,
+                               const R3Geometry::Point &end) {
+        // Длина оси в мировых единицах
+        double axisLen = (end - start).length();
+        // Шаг: 1 единица (можно изменить, если нужно)
+        double step = 1.0;
+        // Определяем единичный вектор вдоль оси
+        R3Geometry::Vector dir = (end - start).normalize();
+        // Находим ближайшее целое число от start вдоль оси (обычно start = -L или -L по соответствующей координате)
+        double t0 = 0; // параметр вдоль оси: start + t * dir
+        // Проще: перебираем целые координаты, которые лежат на оси
+        if (axisDir == "X") {
+            for (int x = -int(L); x <= int(L); ++x) {
+                R3Geometry::Point p(x, 0, 0);
+                // Проецируем точку на экран
+                auto pix = pointToPixels(p);
+                if (!pix.visible) continue;
+                // Рисуем короткую риску перпендикулярно оси X (т.е. вдоль Y или Z)
+                // Для оси X риску делаем параллельно Y-Z плоскости, например в направлении (0,0.1,0) и (0,-0.1,0)
+                R3Geometry::Point wing1(x, 0.15, 0);
+                R3Geometry::Point wing2(x, -0.15, 0);
+                auto seg = segToPixels(wing1, wing2);
+                if (seg.visible) painter->drawLine(seg.vertex[0], seg.vertex[1]);
+                // Подпись: сдвигаем чуть дальше вдоль оси Y
+                if (x != 0) {
+                    auto textPix = pointToPixels({x, 0.2, 0});
+                    if (textPix.visible)
+                        painter->drawText(textPix.vertex[0], QString::number(x));
+                }
+            }
+        }
+        else if (axisDir == "Y") {
+            for (int y = -int(L); y <= int(L); ++y) {
+                R3Geometry::Point p(0, y, 0);
+                auto pix = pointToPixels(p);
+                if (!pix.visible) continue;
+                // Риска вдоль X
+                R3Geometry::Point wing1(0.15, y, 0);
+                R3Geometry::Point wing2(-0.15, y, 0);
+                auto seg = segToPixels(wing1, wing2);
+                if (seg.visible) painter->drawLine(seg.vertex[0], seg.vertex[1]);
+                if (y != 0) {
+                    auto textPix = pointToPixels({0.2, y, 0});
+                    if (textPix.visible)
+                        painter->drawText(textPix.vertex[0], QString::number(y));
+                }
+            }
+        }
+        else if (axisDir == "Z") {
+            for (int z = -int(L); z <= int(L); ++z) {
+                R3Geometry::Point p(0, 0, z);
+                auto pix = pointToPixels(p);
+                if (!pix.visible) continue;
+                // Риска в плоскости XY (например, вдоль X)
+                R3Geometry::Point wing1(0.15, 0, z);
+                R3Geometry::Point wing2(-0.15, 0, z);
+                auto seg = segToPixels(wing1, wing2);
+                if (seg.visible) painter->drawLine(seg.vertex[0], seg.vertex[1]);
+                if (z != 0) {
+                    auto textPix = pointToPixels({0.2, 0, z});
+                    if (textPix.visible)
+                        painter->drawText(textPix.vertex[0], QString::number(z));
+                }
+            }
+        }
+    };
+
+    // Рисуем засечки на трёх осях
+    drawTicksOnAxis("X", {-L,0,0}, {L,0,0});
+    drawTicksOnAxis("Y", {0,-L,0}, {0,L,0});
+    drawTicksOnAxis("Z", {0,0,-L}, {0,0,L});
+
+    // Подпись "0" в центре (можно оставить как есть)
+    auto zero = pointToPixels({0,0,0});
+    if (zero.visible)
+        painter->drawText(zero.vertex[0].x()+10, zero.vertex[0].y()-10, QString("0"));
+
+    // Можно также подписать названия осей X, Y, Z (как было ранее)
+    // Например, у положительных концов осей:
+    auto xEnd = pointToPixels({L,0,0});
+    if (xEnd.visible)
+        painter->drawText(xEnd.vertex[0]+QPointF(10, -5), "X");
+    auto yEnd = pointToPixels({0,L,0});
+    if (yEnd.visible)
+        painter->drawText(yEnd.vertex[0]+QPointF(10, -5), "Y");
+    auto zEnd = pointToPixels({0,0,L});
+    if (zEnd.visible)
+        painter->drawText(zEnd.vertex[0]+QPointF(10, -5), "Z");
+}
