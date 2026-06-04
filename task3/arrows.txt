@@ -1,0 +1,57 @@
+void GraphWidget::drawCoordSystem(QPainter *painter) 
+{
+    painter->setBrush(QBrush(bgColor));
+    painter->drawRect(0, 0, w, h);
+    painter->setBrush(Qt::NoBrush);
+
+    double L = 10*dist;
+
+    QPen penBlack(Qt::black);
+    penBlack.setWidth(2);
+    painter->setPen(penBlack);
+
+    // Лямбда для рисования стрелки по трём точкам: tip (остриё), wing1 и wing2
+    auto drawArrow = [&](const R3Geometry::Point &tip,
+                         const R3Geometry::Point &wing1,
+                         const R3Geometry::Point &wing2) {
+        auto seg1 = segToPixels(tip, wing1);
+        auto seg2 = segToPixels(tip, wing2);
+        if (seg1.visible && seg2.visible) {
+            painter->drawLine(seg1.vertex[0], seg1.vertex[1]);
+            painter->drawLine(seg2.vertex[0], seg2.vertex[1]);
+        }
+    };
+
+    double arrowLen = L / 10.0;   // длина пера стрелки
+    double arrowWid = arrowLen / 2.0;
+
+    // Ось X
+    auto OX = segToPixels({-L, 0, 0}, {L, 0, 0});
+    if (OX.visible) {
+        painter->drawLine(OX.vertex[0], OX.vertex[1]);
+        // Стрелка на положительном конце
+        drawArrow({L, 0, 0}, {L - arrowLen, arrowWid, 0}, {L - arrowLen, -arrowWid, 0});
+        painter->drawText(OX.vertex[1] + QPointF((w/2 - OX.vertex[1].x() < 0 ? -1 : 1)*15, -10), QString("X"));
+    }
+
+    // Ось Y
+    auto OY = segToPixels({0, -L, 0}, {0, L, 0});
+    if (OY.visible) {
+        painter->drawLine(OY.vertex[0], OY.vertex[1]);
+        drawArrow({0, L, 0}, {arrowWid, L - arrowLen, 0}, {-arrowWid, L - arrowLen, 0});
+        painter->drawText(OY.vertex[0] + QPointF((w/2 - OY.vertex[0].x() < 0 ? -1 : 1)*15, -10), QString("Y"));
+    }
+
+    // Ось Z
+    auto OZ = segToPixels({0, 0, -L}, {0, 0, L});
+    if (OZ.visible) {
+        painter->drawLine(OZ.vertex[0], OZ.vertex[1]);
+        drawArrow({0, 0, L}, {0, arrowWid, L - arrowLen}, {0, -arrowWid, L - arrowLen});
+        painter->drawText(OZ.vertex[1] + QPointF(10, (h/2 - OZ.vertex[1].y() < 0 ? -1 : 1)*15), QString("Z"));
+    }
+
+    // Точка 0 (без изменений) ...
+    auto zero = pointToPixels({0, 0, 0});
+    if (zero.visible)
+        painter->drawText(zero.vertex[0].x()+10, zero.vertex[0].y()-10, QString("0"));
+}
