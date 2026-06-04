@@ -1,0 +1,6 @@
+#ifndef COMMONDEFS_H
+#define COMMONDEFS_H
+
+#define EPSILON_FOR_COMPARE (1e-15)
+
+#endif // COMMONDEFS_H
